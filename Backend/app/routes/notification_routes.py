@@ -1,43 +1,39 @@
 from flask import Blueprint, request, jsonify
-
-notification_bp = Blueprint('notification_bp', __name__)
-
-from app.extensions import db
 from app.models.notification import Notification
+from app.extensions import db
 
-# Create
-@notification_bp.route('/', methods=['POST'])
-def create_notification():
-    data = request.json
-    notif = Notification(**data)
-    db.session.add(notif)
-    db.session.commit()
-    return jsonify({'message': 'Notification created', 'data': data}), 201
+notification_bp = Blueprint("notification_bp", __name__)
 
-# Read
-@notification_bp.route('/<int:user_id>', methods=['GET'])
+# Get notifications for a user
+@notification_bp.route("/notifications/<int:user_id>", methods=["GET"])
 def get_notifications(user_id):
-    notifs = Notification.query.filter_by(user_id=user_id).all()
+    notifications = Notification.query.filter_by(user_id=user_id).all()
     return jsonify([{
-        'notification_id': n.notification_id,
-        'message': n.message,
-        'read': n.read,
-        'created_at': n.created_at
-    } for n in notifs])
+        "id": n.id,
+        "type": n.type,
+        "message": n.message,
+        "read_status": n.read_status,
+        "created_at": n.created_at
+    } for n in notifications])
 
-# Update (mark read)
-@notification_bp.route('/<int:notification_id>', methods=['PUT'])
-def update_notification(notification_id):
-    notif = Notification.query.get_or_404(notification_id)
-    data = request.json
-    notif.read = data.get('read', notif.read)
+# Create a notification
+@notification_bp.route("/notifications", methods=["POST"])
+def create_notification():
+    data = request.get_json()
+    notification = Notification(
+        user_id=data.get("user_id"),
+        type=data.get("type"),
+        message=data.get("message"),
+        read_status=data.get("read_status", False)
+    )
+    db.session.add(notification)
     db.session.commit()
-    return jsonify({'message': 'Notification updated'})
+    return jsonify({"id": notification.id, "message": notification.message}), 201
 
-# Delete
-@notification_bp.route('/<int:notification_id>', methods=['DELETE'])
-def delete_notification(notification_id):
-    notif = Notification.query.get_or_404(notification_id)
-    db.session.delete(notif)
+# Mark notification as read
+@notification_bp.route("/notifications/<int:notification_id>/read", methods=["PUT"])
+def mark_as_read(notification_id):
+    notification = Notification.query.get_or_404(notification_id)
+    notification.read_status = True
     db.session.commit()
-    return jsonify({'message': 'Notification deleted'})
+    return jsonify({"message": "Notification marked as read"})

@@ -1,43 +1,43 @@
 from flask import Blueprint, request, jsonify
-
-career_goal_bp = Blueprint('career_goal_bp', __name__)
-
-from app.extensions import db
 from app.models.career_goal import CareerGoal
+from app.extensions import db
+from app.services.ai_service import get_career_path_suggestions
 
-# Create
-@career_goal_bp.route('/', methods=['POST'])
-def create_goal():
-    data = request.json
-    goal = CareerGoal(**data)
-    db.session.add(goal)
-    db.session.commit()
-    return jsonify({'message': 'Career goal created', 'data': data}), 201
+career_goal_bp = Blueprint("career_goal_bp", __name__)
 
-# Read
-@career_goal_bp.route('/<int:user_id>', methods=['GET'])
-def get_goals(user_id):
+# Get all career goals for a user
+@career_goal_bp.route("/career_goals/<int:user_id>", methods=["GET"])
+def get_career_goals(user_id):
     goals = CareerGoal.query.filter_by(user_id=user_id).all()
     return jsonify([{
-        'goal_id': g.goal_id,
-        'title': g.title,
-        'description': g.description
+        "id": g.id,
+        "goal": g.goal,
+        "ai_recommendations": g.ai_recommendations,
+        "created_at": g.created_at
     } for g in goals])
 
-# Update
-@career_goal_bp.route('/<int:goal_id>', methods=['PUT'])
-def update_goal(goal_id):
-    goal = CareerGoal.query.get_or_404(goal_id)
-    data = request.json
-    goal.title = data.get('title', goal.title)
-    goal.description = data.get('description', goal.description)
-    db.session.commit()
-    return jsonify({'message': 'Career goal updated'})
+# Create a career goal
+@career_goal_bp.route("/career_goals", methods=["POST"])
+def create_career_goal():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    goal_text = data.get("goal")
 
-# Delete
-@career_goal_bp.route('/<int:goal_id>', methods=['DELETE'])
-def delete_goal(goal_id):
-    goal = CareerGoal.query.get_or_404(goal_id)
-    db.session.delete(goal)
+    if not user_id or not goal_text:
+        return jsonify({"error": "user_id and goal are required"}), 400
+
+    # Optionally get AI suggestions
+    ai_suggestions = get_career_path_suggestions(user_id, goal_text)
+
+    career_goal = CareerGoal(
+        user_id=user_id,
+        goal=goal_text,
+        ai_recommendations=ai_suggestions
+    )
+    db.session.add(career_goal)
     db.session.commit()
-    return jsonify({'message': 'Career goal deleted'})
+    return jsonify({
+        "id": career_goal.id,
+        "goal": career_goal.goal,
+        "ai_recommendations": career_goal.ai_recommendations
+    }), 201
