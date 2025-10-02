@@ -1,44 +1,90 @@
 from flask import Blueprint, request, jsonify
-
-job_bp = Blueprint('job_bp', __name__)
-
+from app.models.job import Job
 from app.extensions import db
-from app.models.jobs import Job
+from app.services.ai_service import get_recommended_jobs
 
-# Create
-@job_bp.route('/', methods=['POST'])
-def create_job():
-    data = request.json
-    job = Job(**data)
-    db.session.add(job)
-    db.session.commit()
-    return jsonify({'message': 'Job created', 'job': data}), 201
+# job_bp = Blueprint("job_bp", __name__)
 
-# Read
-@job_bp.route('/<int:user_id>', methods=['GET'])
-def get_jobs(user_id):
-    jobs = Job.query.filter_by(user_id=user_id).all()
-    return jsonify([{
-        'job_id': j.job_id,
-        'title': j.title,
-        'company': j.company,
-        'status': j.status
-    } for j in jobs])
+# # Get all jobs
+# @job_bp.route("/jobs", methods=["GET"])
+# def get_jobs():
+#     jobs = Job.query.all()
+#     return jsonify([{
+#         "id": j.id,
+#         "title": j.title,
+#         "company": j.company,
+#         "description": j.description,
+#         "requirements": j.requirements,
+#         "location": j.location,
+#         "link": j.link
+#     } for j in jobs])
 
-# Update
-@job_bp.route('/<int:job_id>', methods=['PUT'])
-def update_job(job_id):
-    job = Job.query.get_or_404(job_id)
-    data = request.json
-    job.status = data.get('status', job.status)
-    job.notes = data.get('notes', job.notes)
-    db.session.commit()
-    return jsonify({'message': 'Job updated'})
+# # Create a job
+# @job_bp.route("/jobs", methods=["POST"])
+# def create_job():
+#     data = request.get_json()
+#     job = Job(
+#         title=data.get("title"),
+#         company=data.get("company"),
+#         description=data.get("description"),
+#         requirements=data.get("requirements", []),
+#         location=data.get("location"),
+#         link=data.get("link")
+#     )
+#     db.session.add(job)
+#     db.session.commit()
+#     return jsonify({"id": job.id, "title": job.title}), 201
 
-# Delete
-@job_bp.route('/<int:job_id>', methods=['DELETE'])
-def delete_job(job_id):
-    job = Job.query.get_or_404(job_id)
-    db.session.delete(job)
-    db.session.commit()
-    return jsonify({'message': 'Job deleted'})
+# # Show AI-recommended jobs for a user
+# @job_bp.route("/jobs/recommended", methods=["GET"])
+# def recommended_jobs():
+#     user_id = request.args.get("user_id")
+#     if not user_id:
+#         return jsonify({"error": "user_id is required"}), 400
+
+#     jobs = get_recommended_jobs(user_id)
+#     return jsonify(jobs)
+
+# from flask import Blueprint, request, jsonify
+
+job_bp = Blueprint("job", __name__)
+
+@job_bp.route("/recommended", methods=["POST"])
+def recommended_jobs():
+    """
+    Recommend jobs based on user's skills, experience, and career goal.
+    """
+    data = request.get_json()
+
+    # Extract inputs
+    skills = data.get("skills", [])
+    experience = data.get("experience", 0)
+    career_goal = data.get("career_goal", "")
+
+    # For now → return dummy jobs using inputs
+    recommendations = [
+        {
+            "title": f"{career_goal} (Python Focus)",
+            "match": 90 if "python" in skills else 70,
+            "required_experience": 2
+        },
+        {
+            "title": "Data Engineer",
+            "match": 80 if "sql" in skills else 65,
+            "required_experience": 3
+        },
+        {
+            "title": "Fullstack Developer",
+            "match": 75 if experience >= 2 else 55,
+            "required_experience": 2
+        }
+    ]
+
+    return jsonify({
+        "input_received": {
+            "skills": skills,
+            "experience": experience,
+            "career_goal": career_goal
+        },
+        "recommended_jobs": recommendations
+    })

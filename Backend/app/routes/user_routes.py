@@ -1,69 +1,53 @@
 from flask import Blueprint, request, jsonify
-from werkzeug.security import generate_password_hash
-from app.extensions import db
 from app.models.user import User
+from app.extensions import db
 
 user_bp = Blueprint('user_bp', __name__)
 
-# Create User
-@user_bp.route('/', methods=['POST'])
+# Create a new user
+@user_bp.route("/users", methods=["POST"])
 def create_user():
-    data = request.json
+    data = request.get_json()
+    name = data.get("name")
+    email = data.get("email")
+    password = data.get("password")
 
-    # Ensure password is provided
-    if "password" not in data or not data["password"]:
-        return jsonify({"error": "Password is required"}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"message": "User already exists"}), 400
 
-    hashed_password = generate_password_hash(data["password"])
-
-    user = User(
-        full_name=data["full_name"],
-        email=data["email"],
-        password_hash=hashed_password,
-        career_goal=data.get("career_goal")
-    )
-
+    user = User(name=name, email=email)
+    user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    return jsonify({"id": user.id, "name": user.name, "email": user.email}), 201
 
-    return jsonify({
-        'message': 'User created',
-        'user': {
-            'user_id': user.user_id,
-            'full_name': user.full_name,
-            'email': user.email,
-            'career_goal': user.career_goal
-        }
-    }), 201
-
-# Read Users
-@user_bp.route('/', methods=['GET'])
+# Get all users
+@user_bp.route("/users", methods=["GET"])
 def get_users():
     users = User.query.all()
-    return jsonify([{
-        'user_id': u.user_id,
-        'full_name': u.full_name,
-        'email': u.email,
-        'career_goal': u.career_goal
-    } for u in users])
+    return jsonify([{"id": u.id, "name": u.name, "email": u.email} for u in users])
 
-# Update User
-@user_bp.route('/<int:user_id>', methods=['PUT'])
+# Get single user by ID
+@user_bp.route("/users/<int:user_id>", methods=["GET"])
+def get_user(user_id):
+    user = User.query.get_or_404(user_id)
+    return jsonify({
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "skills": user.skills,
+        "education": user.education,
+        "experience": user.experience,
+        "preferences": user.preferences
+    })
+
+# Update user
+@user_bp.route("/users/<int:user_id>", methods=["PUT"])
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
-    data = request.json
-    user.full_name = data.get('full_name', user.full_name)
-    user.email = data.get('email', user.email)
-    if "password" in data and data["password"]:  # if updating password
-        user.password_hash = generate_password_hash(data["password"])
-    user.career_goal = data.get('career_goal', user.career_goal)
+    data = request.get_json()
+    for key in ["name", "skills", "education", "experience", "preferences"]:
+        if key in data:
+            setattr(user, key, data[key])
     db.session.commit()
-    return jsonify({'message': 'User updated'})
-
-# Delete User
-@user_bp.route('/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'message': 'User deleted'})
+    return jsonify({"message": "User updated successfully"})
