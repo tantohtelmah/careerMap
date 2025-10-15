@@ -1,90 +1,123 @@
-from flask import Blueprint, request, jsonify
-from app.models.job import Job
-from app.extensions import db
-from app.services.ai_service import get_recommended_jobs
+import os
+import re
+import json
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models import User
+from openai import OpenAI
 
-# job_bp = Blueprint("job_bp", __name__)
+# --------------------------------------------------------------------------
+#  🔹 Blueprint Setup
+# --------------------------------------------------------------------------
+job_bp = Blueprint("job", __name__, url_prefix="/api/jobs")
 
-# # Get all jobs
-# @job_bp.route("/jobs", methods=["GET"])
-# def get_jobs():
-#     jobs = Job.query.all()
-#     return jsonify([{
-#         "id": j.id,
-#         "title": j.title,
-#         "company": j.company,
-#         "description": j.description,
-#         "requirements": j.requirements,
-#         "location": j.location,
-#         "link": j.link
-#     } for j in jobs])
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# # Create a job
-# @job_bp.route("/jobs", methods=["POST"])
-# def create_job():
-#     data = request.get_json()
-#     job = Job(
-#         title=data.get("title"),
-#         company=data.get("company"),
-#         description=data.get("description"),
-#         requirements=data.get("requirements", []),
-#         location=data.get("location"),
-#         link=data.get("link")
-#     )
-#     db.session.add(job)
-#     db.session.commit()
-#     return jsonify({"id": job.id, "title": job.title}), 201
 
-# # Show AI-recommended jobs for a user
-# @job_bp.route("/jobs/recommended", methods=["GET"])
-# def recommended_jobs():
-#     user_id = request.args.get("user_id")
-#     if not user_id:
-#         return jsonify({"error": "user_id is required"}), 400
-
-#     jobs = get_recommended_jobs(user_id)
-#     return jsonify(jobs)
-
-# from flask import Blueprint, request, jsonify
-
-job_bp = Blueprint("job", __name__)
-
-@job_bp.route("/recommended", methods=["POST"])
+# --------------------------------------------------------------------------
+#  🧠 AI-Powered Job Recommendations
+# --------------------------------------------------------------------------
+@job_bp.route("/recommended", methods=["GET"])
+@jwt_required(optional=True)
 def recommended_jobs():
     """
-    Recommend jobs based on user's skills, experience, and career goal.
+    Generate AI-powered job recommendations for the current user
+    (JWT required, or fallback to demo user if JWT is missing).
     """
-    data = request.get_json()
+    try:
+        # ------------------------------------------------------------------
+        #  1️⃣ Identify user (JWT or fallback)
+        # ------------------------------------------------------------------
+        user_id = get_jwt_identity() or 1
+        user = User.query.get(user_id)
 
-    # Extract inputs
-    skills = data.get("skills", [])
-    experience = data.get("experience", 0)
-    career_goal = data.get("career_goal", "")
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-    # For now → return dummy jobs using inputs
-    recommendations = [
-        {
-            "title": f"{career_goal} (Python Focus)",
-            "match": 90 if "python" in skills else 70,
-            "required_experience": 2
-        },
-        {
-            "title": "Data Engineer",
-            "match": 80 if "sql" in skills else 65,
-            "required_experience": 3
-        },
-        {
-            "title": "Fullstack Developer",
-            "match": 75 if experience >= 2 else 55,
-            "required_experience": 2
-        }
-    ]
+        # ------------------------------------------------------------------
+        #  2️⃣ Build prompt for OpenAI
+        # ------------------------------------------------------------------
+        skills = user.skills or "None"
+        education = user.education or "None"
+        experience = user.experience or "None"
+        preferences = getattr(user, "preferences", "None")
 
-    return jsonify({
-        "input_received": {
-            "skills": skills,
-            "experience": experience,
-            "career_goal": career_goal
-        },
-        "recommended_jobs": recommendations
-    })
+        prompt = f"""
+        You are an expert career advisor. Recommend 5 IT or software-related jobs 
+        that best fit this user's background.
+
+        Skills: {skills}
+        Education: {education}
+        Experience: {experience}
+        Career goals or preferences: {preferences}
+
+        For each job, include these exact lowercase keys:
+        title, company, description, required_skills (list), 
+        experience_level (beginner, intermediate, advanced), link.
+
+        Respond strictly as a JSON array only.
+        """
+
+        # ------------------------------------------------------------------
+        #  3️⃣ Query OpenAI model
+        # ------------------------------------------------------------------
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI job recommendation assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+        )
+
+        # ------------------------------------------------------------------
+        #  4️⃣ Clean and parse model output
+        # ------------------------------------------------------------------
+        content = response.choices[0].message.content.strip()
+
+        # Remove markdown code fences (```json ... ```)
+        content = re.sub(r"^```(?:json)?", "", content.strip())
+        content = re.sub(r"```$", "", content.strip())
+        content = content.strip()
+
+        try:
+            recommendations = json.loads(content)
+        except json.JSONDecodeError:
+            print("⚠️ Invalid AI JSON output:\n", content)
+            recommendations = [{"error": "Invalid JSON response", "raw": content}]
+
+        # ------------------------------------------------------------------
+        #  5️⃣ Normalize keys to ensure consistent frontend fields
+        # ------------------------------------------------------------------
+        normalized = []
+        for job in recommendations:
+            normalized.append({
+                "title": job.get("title") or job.get("Title") or "Untitled Role",
+                "company": job.get("company") or job.get("Company") or "N/A",
+                "description": job.get("description") or job.get("Description") or "",
+                "required_skills": job.get("required_skills") or job.get("Required Skills") or [],
+                "experience_level": job.get("experience_level") or job.get("Experience Level") or "Intermediate",
+                "link": job.get("link") or job.get("Link") or "#"
+            })
+
+        # ------------------------------------------------------------------
+        #  6️⃣ Return final JSON response
+        # ------------------------------------------------------------------
+        return jsonify({
+            "user": {
+                "id": user.id,
+                "username": getattr(user, "username", "Guest"),
+                "skills": skills,
+                "education": education,
+                "experience": experience,
+            },
+            "recommendations": normalized,
+        }), 200
+
+    # ----------------------------------------------------------------------
+    #  7️⃣ Global error handling
+    # ----------------------------------------------------------------------
+    except Exception as e:
+        print("AI Recommendation Error:", str(e))
+        return jsonify({"error": "Failed to generate job recommendations"}), 500

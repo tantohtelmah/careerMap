@@ -4,6 +4,8 @@ from app.routes.user_routes import user_bp
 from app.routes.notification_routes import notification_bp
 from app.routes.career_goal_routes import career_goal_bp
 from app.routes.auth_routes import auth_bp
+from app.routes.profile_routes import profile_bp
+from app.routes.certifications import certifications_bp
 
 def register_blueprints(app: Flask):
     app.register_blueprint(job_bp, url_prefix='/api/jobs')
@@ -11,3 +13,5 @@ def register_blueprints(app: Flask):
     app.register_blueprint(notification_bp, url_prefix='/api/notifications')
     app.register_blueprint(career_goal_bp, url_prefix='/api/career_goals')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(profile_bp, url_prefix='/api/profile')
+    app.register_blueprint(certifications_bp, url_prefix='/api/certifications')

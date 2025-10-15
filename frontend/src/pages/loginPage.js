@@ -1,13 +1,42 @@
 import React, { useState } from "react";
+import { loginUser } from "../api/auth";
+import { useNavigate } from "react-router-dom";
+
+
 
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Logging in with", { email, password });
-    onLogin && onLogin({ email });
+    setError("");
+
+    try {
+      const response = await loginUser({ email, password });
+      const user = response.data.user;
+      const token = response.data.token;
+
+      // Store token
+      localStorage.setItem("token", token);
+      console.log(localStorage.getItem("token"));
+
+
+      // Alert success
+      // alert("Login successful!");
+
+      // Navigate to profile page
+      
+      navigate("/profile");
+
+      // Call parent callback
+      onLogin && onLogin(user);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || "Login failed");
+    }
   };
 
   return (
@@ -18,18 +47,15 @@ const LoginPage = ({ onLogin }) => {
         overflow: "hidden",
       }}
     >
-      {/* Background with blur */}
+      {/* Background image with blur */}
       <div
         style={{
-          backgroundImage: "url('/bgImg.png')", 
+          position: "absolute",
+          inset: 0,
+          backgroundImage: "url('bgImg.png')", // Replace with your image
           backgroundSize: "cover",
           backgroundPosition: "center",
-          filter: "blur(6px)",
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          filter: "blur(8px)",
           zIndex: 1,
         }}
       ></div>
@@ -37,45 +63,33 @@ const LoginPage = ({ onLogin }) => {
       {/* Dark overlay */}
       <div
         style={{
-          backgroundColor: "rgba(0,0,0,0.4)",
           position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.4)",
           zIndex: 2,
         }}
       ></div>
 
-      {/* Login Card */}
+      {/* Form card */}
       <div
-        className="d-flex justify-content-center align-items-center vh-100 "
+        className="d-flex justify-content-center align-items-center vh-100"
         style={{ position: "relative", zIndex: 3 }}
       >
-        <div className="col-11 col-sm-8 col-md-6 col-lg-4 p-4 shadow bg-white rounded">
-          {/* Logo + Heading */}
-          <header className="d-flex flex-column align-items-center mb-4">
-            <div className="ratio ratio-1x1 mb-3" style={{ width: "80px" }}>
-              <img
-                src="/logo.png"
-                alt="CareerMap Logo"
-                className="img-fluid rounded"
-              />
-            </div>
+        <div className="col-11 col-sm-8 col-md-6 col-lg-4 p-4 shadow bg-white rounded text-center">
+          {/* Logo */}
+          <img
+            src="logo.png"
+            alt="Logo"
+            style={{ width: "100px", marginBottom: "20px" }}
+          />
 
-            <h5 className="mb-1 text-center fw-bold">Welcome to CareerMap</h5>
-            <p
-              className="text-muted text-center mb-3"
-              style={{ fontSize: "14px" }}
-            >
-              Your personal guide to your future
-            </p>
-            <h6 className="text-start w-100">Login</h6>
-          </header>
+          <h4 className="mb-4">Welcome Back</h4>
 
-          {/* Form */}
           <form style={{ fontSize: "14px" }} onSubmit={handleSubmit}>
-            <div className="mb-3">
+            {error && <p className="text-danger">{error}</p>}
+
+            {/* Email input */}
+            <div className="mb-3 text-start">
               <label htmlFor="email" className="form-label">
                 Email
               </label>
@@ -89,7 +103,8 @@ const LoginPage = ({ onLogin }) => {
               />
             </div>
 
-            <div className="mb-3">
+            {/* Password input */}
+            <div className="mb-3 text-start">
               <label htmlFor="password" className="form-label">
                 Password
               </label>
@@ -103,6 +118,33 @@ const LoginPage = ({ onLogin }) => {
               />
             </div>
 
+            {/* Forgot password / Sign Up links */}
+            <div
+              className="mb-3 d-flex justify-content-between"
+              style={{ fontSize: "14px" }}
+            >
+              <a
+                href="/forgot-password"
+                style={{
+                  color: "#0d6efd",
+                  textDecoration: "none",
+                  fontWeight: 500,
+                }}
+              >
+                <u>Forgot password?</u>
+              </a>
+              <a
+                href="/signup"
+                style={{
+                  color: "#0d6efd",
+                  textDecoration: "none",
+                  fontWeight: 500,
+                }}
+              >
+                <u>Sign Up</u>
+              </a>
+            </div>
+
             {/* Login button */}
             <button
               type="submit"
@@ -111,29 +153,11 @@ const LoginPage = ({ onLogin }) => {
                 backgroundColor: "#6040AB",
                 borderColor: "#6040AB",
                 color: "#fff",
+                fontWeight: 500,
               }}
             >
               Login
             </button>
-
-            {/* Links */}
-            <div
-              className="d-flex justify-content-between"
-              style={{ fontSize: "13px" }}
-            >
-              <a
-                href="#"
-                className="text-primary text-decoration-underline"
-              >
-                Forgot Password
-              </a>
-              <p className="mb-0">
-                No Account?{" "}
-                <a href="#" className="text-primary text-decoration-underline">
-                  Sign up
-                </a>
-              </p>
-            </div>
           </form>
         </div>
       </div>
