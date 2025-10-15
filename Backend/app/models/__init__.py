@@ -1,3 +1,9 @@
+from flask_sqlalchemy import SQLAlchemy
+
+# ✅ Create global SQLAlchemy instance (shared across all models)
+db = SQLAlchemy()
+
+# ✅ Import models below (after db is defined)
 from app.models.user import User
 from app.models.job import Job
 from app.models.career_goal import CareerGoal

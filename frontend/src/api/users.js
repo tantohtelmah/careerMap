@@ -1,3 +1,4 @@
+//  src/api/users.js
 import { api } from './index';
 
 export const getUsers = () => api.get('/users');

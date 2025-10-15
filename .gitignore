@@ -1,0 +1,18 @@
+# Node
+node_modules/
+package-lock.json
+
+# Python
+.venv/
+__pycache__/
+
+# Build or cache
+dist/
+build/
+
+# Environment / config
+.env
+.DS_Store
+
+codeDesign
+package.json
